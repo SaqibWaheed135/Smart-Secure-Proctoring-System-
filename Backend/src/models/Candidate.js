@@ -41,7 +41,7 @@ const candidateSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-    isRegistered: { type: Boolean, default: false }, // New field
+    // isRegistered: { type: Boolean, default: false }, // New field
     role: {
         type: String,
         enum: ['admin', 'instructor', 'student'],

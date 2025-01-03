@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { addCandidates,getCandidates,deleteCandidate,sendRegistrationEmail,CandidateLogin} = require('../controllers/candidateController');
+const { addCandidates,getCandidates,deleteCandidate,sendRegistrationEmail,CandidateLogin,createClassroom,candidateLoginWithClassroom} = require('../controllers/candidateController');
 const Candidate = require('../models/Candidate');
 
 // Route for adding a candidate
@@ -19,5 +19,9 @@ router.delete('/delete-candidates/:id', deleteCandidate);
 router.post('/send-invite',sendRegistrationEmail);
 
 router.post('/login-candidate',CandidateLogin);
+
+router.post('/create-classroom',createClassroom);
+
+router.post('/candidate-login-with-classroom',candidateLoginWithClassroom);
 
 module.exports = router;

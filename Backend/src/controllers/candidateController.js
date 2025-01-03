@@ -1,7 +1,9 @@
-const Candidate = require('../models/Candidate'); // Ensure the model is correctly imported
+const Candidate = require('../models/Candidate'); 
+const Classroom=require('../models/Classroom');// Ensure the model is correctly imported
 const nodemailer = require('nodemailer');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs')
+const crypto = require('crypto');
 
 
 // Configure Nodemailer for Gmail
@@ -23,11 +25,15 @@ const transporter = nodemailer.createTransport({
 const sendRegistrationEmail = async (req, res) => {
     console.log('Request Body:', req.body); // Add this for debugging
 
-    const { candidates } = req.body;
+    const { candidates,classroomCode } = req.body;
 
     if (!candidates || candidates.length === 0) {
         return res.status(400).json({ message: 'No candidates provided!' });
     }
+
+    // if (!classroomCode) {
+    //     return res.status(400).json({ message: 'Classroom Code is missing!' });
+    // }
     try {
         for (const candidate of candidates) {
             const token = jwt.sign(
@@ -36,13 +42,17 @@ const sendRegistrationEmail = async (req, res) => {
                 { expiresIn: '1d' }
             );
 
-            const registrationLink = `http://localhost:3000/CandidateRegistration?token=${token}`;
+            console.log(`Sending email with Classroom Code: "3b738c8bd9"`); // Debugging
+
+
+            const registrationLink = `http://localhost:3000/candidate/classroom/login`;
+
 
             const mailOptions = {
                 from: process.env.EMAIL_USER,
                 to: candidate.email,
                 subject: "Complete Your Registration",
-                text: `Hi ${candidate.firstName},\n\nYou have been invited to register.\nYour username: ${candidate.email}\nPassword: ${candidate.rawPassword}\n\nClick the link below to complete your registration:\n${registrationLink}\n\nBest regards,\nYour Team`
+                text: `Hi ${candidate.firstName},\n\nYou have been invited to join classroom.\nYour username: ${candidate.email}\nPassword: "nmYlvmxK"\n\nYour Classroom Code:"3b738c8bd9"\n\n Click the link below:\n${registrationLink}\n$\n\nBest regards,\nYour Team`
             };
 
 
@@ -116,7 +126,7 @@ const addCandidates = async (req, res) => {
             rollNumber,
             password: hashedPassword,
             rawPassword: randomPassword,
-            isRegistered,
+            //isRegistered,
             role: 'student',
         });
 
@@ -220,6 +230,13 @@ const CandidateLogin = async (req, res) => {
             if (!isPasswordValid) {
                 return res.status(400).json({ message: "Invalid password" });
             }
+            
+            // Generate a unique sessiontoken
+            const sessionToken = crypto.randomBytes(16).toString('hex');
+
+             // Store the session token for the user in the database (if needed for persistence)
+             user.sessionToken = sessionToken;
+             await user.save();
 
             // Generate a new token if the password is valid
             const newToken = jwt.sign(
@@ -228,7 +245,7 @@ const CandidateLogin = async (req, res) => {
                 { expiresIn: '1h' }
             );
 
-            res.status(200).json({ message: "Login successful", token: newToken });
+            res.status(200).json({ message: "Login successful", token: newToken,sessionToken: sessionToken });
         });
     } catch (error) {
         console.error("Error during login:", error);
@@ -237,4 +254,130 @@ const CandidateLogin = async (req, res) => {
 }
 
 
-module.exports = { addCandidates, getCandidates, deleteCandidate, CandidateLogin, sendRegistrationEmail };
+// Create Classroom
+const createClassroom = async (req, res) => {
+    try {
+        const { instructorId, classroomName } = req.body;
+
+        if (!instructorId || !classroomName) {
+            return res.status(400).json({ message: "Instructor ID and Classroom Name are required" });
+        }
+
+        // Generate a unique classroom code
+        const classroomCode = crypto.randomBytes(5).toString('hex'); // Example: 'a3c9f'
+
+        // Create a new classroom
+        const classroom = new Classroom({
+            instructorId,
+            classroomName,
+            classroomCode,
+        });
+
+        await classroom.save();
+
+        res.status(201).json({
+            message: "Classroom created successfully",
+            classroomCode: classroom.classroomCode, // Send the classroom code back to use later
+
+            classroom,
+        });
+    } catch (error) {
+        console.error("Error creating classroom:", error);
+        res.status(500).json({ message: "Server error", error: error.message });
+    }
+};
+
+// Candidate Login with Classroom Code
+// const candidateLoginWithClassroom = async (req, res) => {
+//     try {
+//         const { email, password, classroomCode } = req.body;
+
+//         if (!email || !password || !classroomCode) {
+//             return res.status(400).json({ message: "Email, password, and classroom code are required" });
+//         }
+
+//         // Check if the classroom code exists
+//         const classroom = await Classroom.findOne({ classroomCode });
+//         if (!classroom) {
+//             return res.status(404).json({ message: "Invalid classroom code" });
+//         }
+
+//         // Verify candidate's credentials
+//         const candidate = await Candidate.findOne({ email });
+//         if (!candidate || candidate.role !== 'student') {
+//             return res.status(404).json({ message: "Candidate not found" });
+//         }
+
+//         const isPasswordValid = await bcrypt.compare(password, candidate.password);
+//         if (!isPasswordValid) {
+//             return res.status(400).json({ message: "Invalid password" });
+//         }
+
+//         // Store classroom token in local storage (frontend will handle this part)
+//         const token = jwt.sign(
+//             { id: candidate._id, email: candidate.email, role: "student", classroomCode },
+//             process.env.JWT_SECRET,
+//             { expiresIn: '1h' }
+//         );
+
+//         res.status(200).json({
+//             message: "Login successful",
+//             token,
+//             classroomDetails: classroom,
+//         });
+//     } catch (error) {
+//         console.error("Error during login with classroom code:", error);
+//         res.status(500).json({ message: "Server error", error: error.message });
+//     }
+// };
+
+const candidateLoginWithClassroom = async (req, res) => {
+    try {
+        const { email, password, classroomCode } = req.body;
+
+        // Validate input
+        if (!email || !password || !classroomCode) {
+            return res.status(400).json({ message: "Email, password, and classroom code are required" });
+        }
+
+        // Check if the classroom code exists
+        const classroom = await Classroom.findOne({ classroomCode });
+        if (!classroom) {
+            return res.status(404).json({ message: "Invalid classroom code" });
+        }
+
+        // Verify candidate's credentials
+        const candidate = await Candidate.findOne({ email });
+        if (!candidate || candidate.role !== 'student') {
+            return res.status(404).json({ message: "Candidate not found or not a student" });
+        }
+
+        const isPasswordValid = await bcrypt.compare(password, candidate.password);
+        if (!isPasswordValid) {
+            return res.status(400).json({ message: "Invalid password" });
+        }
+
+        // Generate JWT token with role and classroom code
+        const token = jwt.sign(
+            { id: candidate._id, email: candidate.email, role: candidate.role, classroomCode },
+            process.env.JWT_SECRET,
+            { expiresIn: '1h' }
+        );
+
+        // Send success response with token, role, and classroom details
+        res.status(200).json({
+            message: "Login successful",
+            id:candidate._id,
+            token,
+            role: candidate.role, // Include the role in the response
+            email: candidate.email, // Include the email in the response
+            classroomDetails: classroom, // Include classroom details
+        });
+    } catch (error) {
+        console.error("Error during login with classroom code:", error);
+        res.status(500).json({ message: "Server error", error: error.message });
+    }
+};
+
+
+module.exports = { addCandidates, getCandidates, deleteCandidate, CandidateLogin, sendRegistrationEmail, createClassroom,candidateLoginWithClassroom  };

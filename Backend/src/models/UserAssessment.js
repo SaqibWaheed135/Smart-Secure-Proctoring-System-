@@ -13,7 +13,9 @@ const UserQuizSchema = new mongoose.Schema({
         },
     ],
     score: { type: Number, default: 0 },
-    isEvaluated:{type:Boolean,default:false},               
+    isEvaluated:{type:Boolean,default:false},      
+    selfie: { type: String, default: null }, // Path or URL to the uploaded selfie
+         
     finalScore:{type:Number,default:null},
     attempted_at: { type: Date, default: Date.now },
     status: { type: String, enum: ['completed', 'incomplete'], default: 'completed' },

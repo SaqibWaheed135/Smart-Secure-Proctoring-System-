@@ -1,5 +1,6 @@
 const UserQuiz = require('../models/UserAssessment');
 const Quiz = require('../models/Assessment');
+const UserSelfies=require('../models/MobAppModels/UploadSelfie');
 
 const submitQuiz = async (req, res) => {
     const { user_id, quiz_id, answers } = req.body;
@@ -134,10 +135,8 @@ const getQuizAnswers = async (req, res) => {
     }
 };
 
-
-
 const evaluateQuiz = async (req, res) => {
-    const { user_id, quiz_id, evaluation, answers } = req.body; // evaluation will contain the score and any feedback
+    const { user_id, quiz_id, evaluation, answers , selfie} = req.body; // evaluation will contain the score and any feedback
 
     if (!user_id || !quiz_id || !evaluation || typeof evaluation.score !== 'number' || !Array.isArray(answers)) {
         return res.status(400).json({ success: false, message: 'Invalid evaluation data.' });
@@ -150,6 +149,12 @@ const evaluateQuiz = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Quiz attempt not found or already evaluated.' });
         }
 
+        // 2. Check if the selfie has been uploaded
+        const userSelfie = await UserSelfies.findOne({ userId, assessmentId});
+        if (!userSelfie) {
+            return res.status(400).json({ success: false, message: 'Selfie is required before evaluating the quiz.' });
+        }
+
         userQuiz.answers = answers; // store the user's answers
         console.log(userQuiz.answers);
         // Evaluate the quiz answers (custom logic for evaluating can be added here)
@@ -157,11 +162,15 @@ const evaluateQuiz = async (req, res) => {
         userQuiz.finalScore = evaluation.score; // set the final score
         userQuiz.feedback = evaluation.feedback || ''; // optional feedback
 
+        userQuiz.filePath = userSelfie.filePath; // Assuming `filePath` is where the selfie image is stored
+
+
         await userQuiz.save();
 
         return res.status(200).json({
             success: true,
             message: 'Quiz evaluated successfully.',
+            selfiePath:userSelfie.path
         });
     } catch (err) {
         console.error(err);

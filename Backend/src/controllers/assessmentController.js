@@ -1,7 +1,11 @@
 const Quiz = require('../models/Assessment');
+const QRCode = require('qrcode');
+const crypto = require('crypto');
+const jwt=require('jsonwebtoken');
+const Candidate=require('../models/Candidate');
 
 const createAssessment = async (req, res) => {
-    const { name, description, start_date, end_date, questions } = req.body;
+    const { name, description, start_date, end_date, questions, qrCode,userId,candidateToken} = req.body;
 
     // Validate required fields
     if (!name || !description || !start_date || !end_date) {
@@ -43,16 +47,40 @@ const createAssessment = async (req, res) => {
             start_date,
             end_date,
             questions,
+            qrCode,
             created_at: new Date(),
+            //userId,
         });
 
         // Save to the database
         await quizData.save();
 
+        // Generate a unique WebSocket token
+        const webSocketToken=crypto.randomBytes(16).toString('hex');
+
+        // Generate QR code containing WebSocket URL and token
+        const qrData = JSON.stringify({
+            wsUrl: 'http://localhost:4001', // Replace with your WebSocket server URL
+            token: webSocketToken,
+            assessmentId: quizData._id,
+            candidateToken,
+            //sessionToken:sessionToken,
+        });
+
+        const qrCodeUrl = await QRCode.toDataURL(qrData);
+        quizData.qrCode = qrCodeUrl;
+        await quizData.save();
+       
+        // quizData.sessionToken=sessionToken;
+        // await quizData.save();
+
         return res.status(201).json({
             success: true,
             message: 'Assessment created successfully.',
             record: quizData,
+            qrCode: qrCodeUrl,
+            //token,
+            //sessionToken,
         });
     } catch (err) {
         console.error(err);
@@ -63,9 +91,9 @@ const createAssessment = async (req, res) => {
     }
 };
 
-const getAssessment= async (req, res) => {
+const getAssessment = async (req, res) => {
     try {
-        const assessments= await Quiz.find(); // Fetch all candidates from the database
+        const assessments = await Quiz.find(); // Fetch all assesments from the database
         res.json(assessments);
     } catch (err) {
         console.error(err);
@@ -73,7 +101,7 @@ const getAssessment= async (req, res) => {
     }
 }
 
-const deleteAssessment=async(req,res)=>{
+const deleteAssessment = async (req, res) => {
     try {
         const { id } = req.params;
         if (!id) {
@@ -93,4 +121,4 @@ const deleteAssessment=async(req,res)=>{
 }
 
 
-module.exports = { createAssessment, getAssessment , deleteAssessment};
+module.exports = { createAssessment, getAssessment, deleteAssessment };
